@@ -2,31 +2,27 @@
 import { useState, useEffect } from 'react';
 
 export function useLocalStorage(key, initialValue) {
-  const [value, setValue] = useState(initialValue);
-  const [isMounted, setIsMounted] = useState(false);
-
-  // Initialize from localStorage only once after mount
-  useEffect(() => {
-    setIsMounted(true);
+  const [value, setValue] = useState(() => {
+    // Always return initialValue during SSR
+    if (typeof window === 'undefined') {
+      return initialValue;
+    }
     try {
-      const storedValue = localStorage.getItem(key);
-      if (storedValue !== null) {
-        setValue(JSON.parse(storedValue));
-      }
+      const storedValue = window.localStorage.getItem(key);
+      return storedValue ? JSON.parse(storedValue) : initialValue;
+    } catch (error) {
+      console.error('LocalStorage error:', error);
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
       console.error('LocalStorage error:', error);
     }
-  }, [key]); // Only depends on key
-
-  // Save to localStorage when value changes (after mount)
-  useEffect(() => {
-    if (!isMounted) return;
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error('LocalStorage error:', error);
-    }
-  }, [value, key, isMounted]);
+  }, [key, value]);
 
   return [value, setValue];
 }

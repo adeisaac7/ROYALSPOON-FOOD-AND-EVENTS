@@ -1,5 +1,6 @@
 "use client";
 export const dynamic = 'force-dynamic';
+import { Suspense } from "react";
 
 import { useEffect, useState, useContext } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,7 +21,7 @@ const PaystackPaymentButton = NextDynamic(
 );
 
 function Checkout() {
-  const { user } = useUser();
+  const { isLoaded: userLoaded, user } = useUser();
   const params = useSearchParams();
   const router = useRouter();
   const { updateCart, setUpdateCart } = useContext(CartUpdateContext);
@@ -35,10 +36,12 @@ function Checkout() {
   const [zip, setZip] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
   useEffect(() => {
+    setIsClient(true);
     if (user) {
       GetUserCart();
     }
@@ -60,6 +63,7 @@ function Checkout() {
     setTaxAmount(tax);
     setTotal(grandTotal);
   };
+
 
   const handlePaymentSuccess = async () => {
     toast.success("Payment Successful!");
@@ -160,8 +164,27 @@ function Checkout() {
     onSuccess: handlePaymentSuccess,
     onClose: () => toast.error("Payment closed, try again"),
   };
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="flex justify-center p-10">Loading checkout...</div>;
+  }
+
+
+   if (!isClient || !userLoaded) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader className="animate-spin" size={48} />
+      </div>
+    );
+  }
 
   return (
+    <Suspense fallback={<div className="flex justify-center p-10">Loading checkout...</div>}>
     <div className="p-4 md:p-10">
       <h2 className="font-bold text-2xl my-5 text-center">Checkout</h2>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -208,6 +231,7 @@ function Checkout() {
         </div>
       </div>
     </div>
+    </Suspense>
   );
 }
 
