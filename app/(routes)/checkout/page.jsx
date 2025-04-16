@@ -1,9 +1,8 @@
 "use client";
 export const dynamic = 'force-dynamic';
 import { Suspense } from "react";
-
 import { useEffect, useState, useContext } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { Loader } from "lucide-react";
@@ -17,12 +16,15 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const PaystackPaymentButton = NextDynamic(
   () => import("react-paystack").then((mod) => mod.PaystackButton),
-  { ssr: false }
+  { 
+    ssr: false,
+    loading: () => <Button disabled>Loading payment...</Button>
+  }
 );
 
-function Checkout() {
+// Wrapper component to handle search params separately
+function CheckoutContent() {
   const { isLoaded: userLoaded, user } = useUser();
-  const params = useSearchParams();
   const router = useRouter();
   const { updateCart, setUpdateCart } = useContext(CartUpdateContext);
 
@@ -36,12 +38,17 @@ function Checkout() {
   const [zip, setZip] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isClient, setIsClient] = useState(false);
+  const [restaurantName, setRestaurantName] = useState("Royal Spoon Foods");
 
   const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
   useEffect(() => {
-    setIsClient(true);
+    // Get restaurant name from URL when component mounts on client side
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setRestaurantName(params.get("restaurant") || "Royal Spoon Foods");
+    }
+
     if (user) {
       GetUserCart();
     }
@@ -64,7 +71,6 @@ function Checkout() {
     setTotal(grandTotal);
   };
 
-
   const handlePaymentSuccess = async () => {
     toast.success("Payment Successful!");
     try {
@@ -84,7 +90,7 @@ function Checkout() {
     const data = {
       email: user?.primaryEmailAddress.emailAddress,
       orderAmount: total,
-      restaurantName: params.get("restaurant"),
+      restaurantName,
       userName: user?.fullName,
       phone,
       address,
@@ -128,7 +134,7 @@ function Checkout() {
       phone,
       address,
       zipCode: zip,
-      restaurantName: params.get("restaurant"),
+      restaurantName,
       orderItems: cart,
       subtotal: subTotal,
       taxAmount,
@@ -151,7 +157,7 @@ function Checkout() {
   const redirectToConfirmation = (orderId) => {
     router.replace(
       `/confirmation?orderId=${orderId}&totalAmount=${total.toFixed(2)}&restaurantName=${
-        encodeURIComponent(params.get("restaurant") || "Royal Spoon Foods")
+        encodeURIComponent(restaurantName)
       }`
     );
   };
@@ -164,18 +170,8 @@ function Checkout() {
     onSuccess: handlePaymentSuccess,
     onClose: () => toast.error("Payment closed, try again"),
   };
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <div className="flex justify-center p-10">Loading checkout...</div>;
-  }
-
-
-   if (!isClient || !userLoaded) {
+  if (!userLoaded) {
     return (
       <div className="flex justify-center items-center h-screen">
         <Loader className="animate-spin" size={48} />
@@ -184,7 +180,6 @@ function Checkout() {
   }
 
   return (
-    <Suspense fallback={<div className="flex justify-center p-10">Loading checkout...</div>}>
     <div className="p-4 md:p-10">
       <h2 className="font-bold text-2xl my-5 text-center">Checkout</h2>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -210,7 +205,7 @@ function Checkout() {
         {/* Order Summary */}
         <div className="bg-gray-100 p-5 rounded-lg shadow-md">
           <h2 className="text-center font-bold text-lg bg-gray-300 py-2">
-            Total Cart ({cart?.length})
+            Total Cart ({cart?.length || 0})
           </h2>
           <div className="p-4 space-y-4">
             <h2 className="flex justify-between">Subtotal: <span>₦{subTotal}</span></h2>
@@ -231,8 +226,14 @@ function Checkout() {
         </div>
       </div>
     </div>
-    </Suspense>
   );
 }
 
-export default Checkout;
+// Main checkout component with Suspense boundary
+export default function Checkout() {
+  return (
+    <Suspense fallback={<div className="flex justify-center p-10">Loading checkout...</div>}>
+      <CheckoutContent />
+    </Suspense>
+  );
+}
